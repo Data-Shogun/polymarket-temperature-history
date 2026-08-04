@@ -7,7 +7,39 @@ import requests
 from datetime import datetime, timezone, timedelta, time
 import altair as alt
 
-st.title('Maximum Temperature History - London')
+st.title('Maximum Temperature History')
+
+# Date format converter (compantible with event urls)
+def format_date_string(date_str):
+    dt = datetime.strptime(date_str, "%Y-%m-%d")
+    return f"{dt.strftime('%B').lower()}-{dt.day}-{dt.year}"
+
+def excract_number_from_temp_str(temp_str):
+    return int(temp_str.split('°C')[0])
+
+# Helper function to excract temperature ranges of a particular date and city
+def extract_temperature_range(city, date):
+    # event_url_sample = f'https://gamma-api.polymarket.com/events/slug/highest-temperature-in-london-on-august-2-2026'
+    formatted_date = format_date_string(str(date))
+    event_url = f'https://gamma-api.polymarket.com/events/slug/highest-temperature-in-{city}-on-{formatted_date}'
+    st.write('event url:', event_url)
+    response = requests.get(event_url).json()
+    markets = response["markets"]
+
+    lowest_temp_item = [item for item in markets if 'below' in item.get('groupItemTitle').lower()][0]
+    highest_temp_item = [item for item in markets if 'higher' in item.get('groupItemTitle').lower()][0]
+
+    lowest_temp_str = lowest_temp_item.get('groupItemTitle')
+    highest_temp_str = highest_temp_item.get('groupItemTitle')
+    
+    return {
+        'lowest': lowest_temp_str,
+        'highest': highest_temp_str
+    }
+
+
+
+
 
 
 # 1. Define date bounds
@@ -25,6 +57,8 @@ ten_days_ago = now - timedelta(days=10)
 with st.sidebar:
     st.header("Settings")
 
+    city = st.selectbox('City', options=["London", "Paris"]).lower()
+
     # Date Picker (Restricted between 5 days ago and today)
     selected_date = st.date_input(
         label="Select Target Event Date",
@@ -33,23 +67,14 @@ with st.sidebar:
         max_value=one_day_ago.date(),
     )
 
-    # default start time: 2 days ago at 5AM
     selected_date_time = datetime.combine(selected_date, time.min)
-    st.write(selected_date_time)
+
+    # default start time: 2 days ago at 5AM
     default_start_time = selected_date_time - timedelta(days=2) + timedelta(hours=5)
 
     # default end time: same day at 8PM
     default_end_time = selected_date_time + timedelta(hours=20)
 
-    temperature = st.slider(
-        label="Select temperature",
-        value=28,
-        min_value=23,
-        max_value=32,
-    )
-
-    st.write(default_start_time)
-    st.write(default_end_time)
 
 
     selected_range = st.slider(
@@ -65,6 +90,23 @@ with st.sidebar:
     if st.button("Reset Time Bounds to Now"):
         st.session_state.ref_now = datetime.now()
         st.rerun()
+
+    temperature_range = extract_temperature_range(city=city, date=selected_date)
+
+    min_temp = excract_number_from_temp_str(temperature_range.get('lowest'))
+    max_temp = excract_number_from_temp_str(temperature_range.get('highest'))
+
+    st.write(min_temp, '|', max_temp)
+
+    temperature = st.slider(
+        label="Select temperature",
+        # value=28,
+        min_value=min_temp,
+        max_value=max_temp,
+    )
+
+
+
 
 # 3. Extract min and max from output tuple
 start_time, end_time = selected_range
@@ -85,7 +127,7 @@ formatted_year = selected_date.strftime("%Y")  # e.g., '2026'
 date_slug_str = f"{formatted_month_year}-{formatted_day}-{formatted_year}".lower()
 
 # 1. Fetch details directly for this specific market
-MARKET_SLUG = f"highest-temperature-in-london-on-{date_slug_str}-{temperature}c"
+MARKET_SLUG = f"highest-temperature-in-{city}-on-{date_slug_str}-{temperature}c"
 market_url = f"https://gamma-api.polymarket.com/markets/slug/{MARKET_SLUG}"
 st.write(market_url)
 response = requests.get(market_url).json()
@@ -154,5 +196,4 @@ except:
 
 # st.line_chart(x=history_standard['time'], y=history_standard['price'])
 
-
-
+st.write(temperature_range)
