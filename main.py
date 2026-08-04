@@ -1,11 +1,12 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
 import json
 import requests
-from datetime import datetime, timezone, timedelta, time
+from datetime import datetime, timedelta, time
 import altair as alt
+
+# CONSTANTS
+fidelity = 5
 
 st.title('Maximum Temperature History')
 
@@ -18,11 +19,10 @@ def excract_number_from_temp_str(temp_str):
     return int(temp_str.split('°C')[0])
 
 # Helper function to excract temperature ranges of a particular date and city
-def extract_temperature_range(city, date):
+def extract_temperatures_results(city, date):
     # event_url_sample = f'https://gamma-api.polymarket.com/events/slug/highest-temperature-in-london-on-august-2-2026'
     formatted_date = format_date_string(str(date))
     event_url = f'https://gamma-api.polymarket.com/events/slug/highest-temperature-in-{city}-on-{formatted_date}'
-    st.write('event url:', event_url)
     response = requests.get(event_url).json()
     markets = response["markets"]
 
@@ -31,15 +31,53 @@ def extract_temperature_range(city, date):
 
     lowest_temp_str = lowest_temp_item.get('groupItemTitle')
     highest_temp_str = highest_temp_item.get('groupItemTitle')
-    
+
+    # Exctract the data needed
+    temperatares_list = []
+    verdict = None
+    for item in markets:
+        temp_str = item.get('groupItemTitle')
+        temp_val = excract_number_from_temp_str(temp_str)
+
+        outcomePrices = json.loads(item.get('outcomePrices'))
+
+        temp_slug = item.get("slug")
+
+        if 'below' in temp_str:
+            lowest_temp_str = temp_str
+            lowest_temp_val = temp_val
+            
+        elif 'higher' in temp_str:
+            highest_temp_str = temp_str
+            highest_temp_val = temp_val
+            
+
+        # Check if that's the correct temperature (verdict)
+        if int(outcomePrices[0]) == 1:
+            verdict_val = temp_val
+            verdict_str = temp_str
+
+        temperatares_list.append({
+            'temp_str': temp_str,
+            'temp_val': temp_val,
+            'temp_slug': temp_slug
+        })
+
+    temperatures_range = [range(lowest_temp_val, highest_temp_val)]
+    # st.write('verdict:', verdict)
+    # st.write(temperatares_list)
+
     return {
-        'lowest': lowest_temp_str,
-        'highest': highest_temp_str
+        'verdict_str': verdict_str,
+        'verdict_val': verdict_val,
+        'lowest_temp_str': lowest_temp_str,
+        'highest_temp_str': highest_temp_str,
+        'lowest_temp_val': lowest_temp_val,
+        'highest_temp_val': highest_temp_val,
+        'temperatures_range': temperatures_range,
+        'temperatares_list': temperatares_list,
+        'event_url': event_url,
     }
-
-
-
-
 
 
 # 1. Define date bounds
@@ -75,8 +113,6 @@ with st.sidebar:
     # default end time: same day at 8PM
     default_end_time = selected_date_time + timedelta(hours=20)
 
-
-
     selected_range = st.slider(
         label="Select Date & Time Range",
         min_value=ten_days_ago,
@@ -91,22 +127,23 @@ with st.sidebar:
         st.session_state.ref_now = datetime.now()
         st.rerun()
 
-    temperature_range = extract_temperature_range(city=city, date=selected_date)
+    temperatures_results = extract_temperatures_results(city=city, date=selected_date)
 
-    min_temp = excract_number_from_temp_str(temperature_range.get('lowest'))
-    max_temp = excract_number_from_temp_str(temperature_range.get('highest'))
+    verdict_str = temperatures_results.get('verdict_str')
+    verdict_val = temperatures_results.get('verdict_val')
+    min_temp = temperatures_results.get('lowest_temp_val')
+    max_temp = temperatures_results.get('highest_temp_val')
 
-    st.write(min_temp, '|', max_temp)
 
     temperature = st.slider(
         label="Select temperature",
-        # value=28,
+        value=verdict_val,
         min_value=min_temp,
         max_value=max_temp,
     )
 
 
-
+st.info(f'Verdict: {verdict_str}')
 
 # 3. Extract min and max from output tuple
 start_time, end_time = selected_range
@@ -114,23 +151,29 @@ start_time, end_time = selected_range
 st.write("**Selected Start Time:**", start_time)
 st.write("**Selected End Time:**", end_time)
 
-# TEST PARAMETERS
-test_temp = '28c'
-test_fidelity = 5
-# test_start_time = datetime(2026, 8, 2, 0, 0, 0, tzinfo=timezone.utc)
-# test_end_time = datetime(2026, 8, 3, 0, 0, 0, tzinfo=timezone.utc)
+# # TEST PARAMETERS
+# test_temp = '28c'
+# test_fidelity = 5
 
 formatted_month_year = selected_date.strftime("%B")  # e.g., 'August'
 formatted_day = str(selected_date.day)  # e.g., '2' or '3'
 formatted_year = selected_date.strftime("%Y")  # e.g., '2026'
 
-date_slug_str = f"{formatted_month_year}-{formatted_day}-{formatted_year}".lower()
+# date_slug_str = f"{formatted_month_year}-{formatted_day}-{formatted_year}".lower()
+MARKET_SLUG = [temp_item.get('temp_slug') for temp_item in temperatures_results.get('temperatares_list') if temp_item.get('temp_val') == temperature][0]
+market_url = f"https://gamma-api.polymarket.com/markets/slug/{MARKET_SLUG}"
 
 # 1. Fetch details directly for this specific market
-MARKET_SLUG = f"highest-temperature-in-{city}-on-{date_slug_str}-{temperature}c"
-market_url = f"https://gamma-api.polymarket.com/markets/slug/{MARKET_SLUG}"
-st.write(market_url)
+# MARKET_SLUG = f"highest-temperature-in-{city}-on-{date_slug_str}-{temperature}c"
+# market_url = f"https://gamma-api.polymarket.com/markets/slug/{MARKET_SLUG}"
+
+
+
+st.markdown(f":small[**API URL: {market_url}**]")
 response = requests.get(market_url).json()
+
+st.write(" ")
+st.write(" ")
 
 try:
     # Parse the token IDs (clobTokenIds comes back as a JSON-encoded string)
@@ -145,7 +188,7 @@ try:
     history_url = "https://clob.polymarket.com/prices-history"
     params = {
         "market": yes_token_id,
-        "fidelity": test_fidelity,     # data resolution in minutes
+        "fidelity": fidelity,     # data resolution in minutes
         "startTs": int(start_time.timestamp()),
         "endTs": int(end_time.timestamp())
         # "interval": "1d",  # or "1d", "1w", "1m"
@@ -187,13 +230,3 @@ try:
     
 except:
     st.warning("No price history returned for this timeframe and temperature.")
-
-
-
-# history_standard = [{'time': datetime.fromtimestamp(_hist['t']).strftime('%Y-%m-%d, %H:%M:%S'), 'price': _hist['p'] * 100} for _hist in history]
-
-# st.write(history_standard)
-
-# st.line_chart(x=history_standard['time'], y=history_standard['price'])
-
-st.write(temperature_range)
