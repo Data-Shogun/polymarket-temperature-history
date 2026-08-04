@@ -1,9 +1,10 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
 import json
 import requests
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, time
 import altair as alt
 
 st.title('Maximum Temperature History - London')
@@ -19,9 +20,26 @@ now = st.session_state.ref_now
 one_day_ago = now - timedelta(days=1)
 two_days_ago = now - timedelta(days=2)
 five_days_ago = now - timedelta(days=5)
+ten_days_ago = now - timedelta(days=10)
 
 with st.sidebar:
     st.header("Settings")
+
+    # Date Picker (Restricted between 5 days ago and today)
+    selected_date = st.date_input(
+        label="Select Target Event Date",
+        value=one_day_ago.date(),  # Default to current date
+        min_value=five_days_ago.date(),
+        max_value=one_day_ago.date(),
+    )
+
+    # default start time: 2 days ago at 5AM
+    selected_date_time = datetime.combine(selected_date, time.min)
+    st.write(selected_date_time)
+    default_start_time = selected_date_time - timedelta(days=2) + timedelta(hours=5)
+
+    # default end time: same day at 8PM
+    default_end_time = selected_date_time + timedelta(hours=20)
 
     temperature = st.slider(
         label="Select temperature",
@@ -30,20 +48,15 @@ with st.sidebar:
         max_value=32,
     )
 
-    # 1. Date Picker (Restricted between 5 days ago and today)
-    selected_date = st.date_input(
-        label="Select Target Event Date",
-        value=one_day_ago.date(),  # Default to current date
-        min_value=five_days_ago.date(),
-        max_value=one_day_ago.date(),
-    )
+    st.write(default_start_time)
+    st.write(default_end_time)
 
 
     selected_range = st.slider(
         label="Select Date & Time Range",
-        min_value=five_days_ago,
+        min_value=ten_days_ago,
         max_value=now,
-        value=(two_days_ago, one_day_ago),
+        value=(default_start_time, default_end_time),
         step=timedelta(hours=1),
         format="YYYY-MM-DD HH:mm",
     )
