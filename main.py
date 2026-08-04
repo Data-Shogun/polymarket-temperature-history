@@ -80,6 +80,116 @@ def extract_temperatures_results(city, date):
     }
 
 
+def generate_df(temperature):
+     MARKET_SLUG = [
+          temp_item.get('temp_slug') for temp_item in temperatures_results.get('temperatares_list') if temp_item.get('temp_val') == temperature
+          ][0]
+
+     market_url = f"https://gamma-api.polymarket.com/markets/slug/{MARKET_SLUG}"
+
+     # st.markdown(f":small[**API URL: {market_url}**]")
+     
+     response = requests.get(market_url).json()
+ 
+     try:
+        # Parse the token IDs (clobTokenIds comes back as a JSON-encoded string)
+        clob_token_ids = json.loads(response["clobTokenIds"])
+        # Typically, index 0 = YES, index 1 = NO
+        yes_token_id = clob_token_ids[0]
+        no_token_id = clob_token_ids[1]
+
+        # print(f"YES Token ID: {yes_token_id}")
+
+        # 2. Query price history for the YES token
+        history_url = "https://clob.polymarket.com/prices-history"
+        params = {
+            "market": yes_token_id,
+            "fidelity": fidelity,     # data resolution in minutes
+            "startTs": int(start_time.timestamp()),
+            "endTs": int(end_time.timestamp())
+            # "interval": "1d",  # or "1d", "1w", "1m"
+        }
+
+        history_response = requests.get(history_url, params=params).json()
+        history = history_response.get('history', [])
+
+        # Convert raw output to Pandas Dataframe
+        df = pd.DataFrame(history)
+
+        # Convert Unix timestamp to UTC datetime objects
+        df["time"] = pd.to_datetime(df["t"], unit="s", utc=True)
+
+        # Format time string column
+        df["time_str"] = df["time"].dt.strftime("%Y-%m-%d %H:%M:%S")
+
+        # Convert price to percentage
+        df["price"] = df["p"] * 100
+
+        return df
+
+     except Exception as e:
+        raise Exception('No dataframe return')
+
+    
+
+
+def plot_temperature(temperature):
+
+    try:
+        df = generate_df(temperature)
+
+        # Draw altair interactive chart
+        chart = (
+            alt.Chart(df)
+            .mark_line(point=False)  # point=True gives visible hover targets
+            .encode(
+                x=alt.X("time:T", title="Time"),
+                y=alt.Y("price:Q", title="Price (%)"),
+                tooltip=[
+                    alt.Tooltip("time_str:N", title="Exact Time"),
+                    alt.Tooltip("price:Q", title="Price (%)", format=".2f"),
+                ],
+            )
+            .interactive()  # Enables zoom & pan
+        )
+        # st.altair_chart(chart, use_container_width=True)
+        st.altair_chart(chart, width='stretch')
+        
+    except:
+        st.warning("No price history returned for this timeframe and temperature.")
+
+
+def multi_plot_temperatures(temperatures_list):
+    df_list = [generate_df(temperature) for temperature in temperatures_list]
+
+    df_melted = df_list.melt(
+        id_vars=["time", "time_str"],
+        value_vars=temperatures_list,
+        var_name="Series",
+        value_name="temperature",
+    )
+
+    chart = (
+        alt.Chart(df_melted)
+        .mark_line(point=False)
+        .encode(
+            x=alt.X("time:T", title="Time"),
+            y=alt.Y("temperature:Q", title="Temperature (°C)"),
+            color=alt.Color("Series:N", title="Metric"),  # Automatically adds a legend
+            tooltip=[
+                alt.Tooltip("time_str:N", title="Exact Time"),
+                alt.Tooltip("Series:N", title="Series"),
+                alt.Tooltip("temperature:Q", title="Temp (°C)", format=".2f"),
+            ],
+        )
+        .interactive()
+    )
+
+    st.altair_chart(chart, use_container_width=True)
+
+
+
+
 # 1. Define date bounds
 # --- FIX: Store reference time in session_state so it remains stable during script reruns ---
 if "ref_now" not in st.session_state:
@@ -134,99 +244,42 @@ with st.sidebar:
     min_temp = temperatures_results.get('lowest_temp_val')
     max_temp = temperatures_results.get('highest_temp_val')
 
+    st.write(" ")
 
-    temperature = st.slider(
-        label="Select temperature",
-        value=verdict_val,
-        min_value=min_temp,
-        max_value=max_temp,
+    num_temp_plots = st.number_input(
+        'Number of Plots', value=1, min_value=1, max_value=len(temperatures_results.get('temperatares_list'))
     )
+    
+    # single_plot = st.checkbox('Single Plot', value=True)
+
+    st.write(" ")
+
+    plotting_temperatures_list = []
+
+    for i in range(num_temp_plots):
+        
+        input_temperature = st.slider(
+            label=f"Select temperature {i + 1}",
+            value=verdict_val,
+            min_value=min_temp,
+            max_value=max_temp,
+            key=f"temp_slider_{i}",
+        )
+
+        plotting_temperatures_list.append(input_temperature)
 
 
 st.info(f'Verdict: {verdict_str}')
 
-# 3. Extract min and max from output tuple
+# Extract min and max from output tuple
 start_time, end_time = selected_range
 
 st.write("**Selected Start Time:**", start_time)
 st.write("**Selected End Time:**", end_time)
 
-# # TEST PARAMETERS
-# test_temp = '28c'
-# test_fidelity = 5
-
 formatted_month_year = selected_date.strftime("%B")  # e.g., 'August'
 formatted_day = str(selected_date.day)  # e.g., '2' or '3'
 formatted_year = selected_date.strftime("%Y")  # e.g., '2026'
 
-# date_slug_str = f"{formatted_month_year}-{formatted_day}-{formatted_year}".lower()
-MARKET_SLUG = [temp_item.get('temp_slug') for temp_item in temperatures_results.get('temperatares_list') if temp_item.get('temp_val') == temperature][0]
-market_url = f"https://gamma-api.polymarket.com/markets/slug/{MARKET_SLUG}"
-
-# 1. Fetch details directly for this specific market
-# MARKET_SLUG = f"highest-temperature-in-{city}-on-{date_slug_str}-{temperature}c"
-# market_url = f"https://gamma-api.polymarket.com/markets/slug/{MARKET_SLUG}"
-
-
-
-st.markdown(f":small[**API URL: {market_url}**]")
-response = requests.get(market_url).json()
-
-st.write(" ")
-st.write(" ")
-
-try:
-    # Parse the token IDs (clobTokenIds comes back as a JSON-encoded string)
-    clob_token_ids = json.loads(response["clobTokenIds"])
-    # Typically, index 0 = YES, index 1 = NO
-    yes_token_id = clob_token_ids[0]
-    no_token_id = clob_token_ids[1]
-
-    # print(f"YES Token ID: {yes_token_id}")
-
-    # 2. Query price history for the YES token
-    history_url = "https://clob.polymarket.com/prices-history"
-    params = {
-        "market": yes_token_id,
-        "fidelity": fidelity,     # data resolution in minutes
-        "startTs": int(start_time.timestamp()),
-        "endTs": int(end_time.timestamp())
-        # "interval": "1d",  # or "1d", "1w", "1m"
-    }
-
-    history_response = requests.get(history_url, params=params).json()
-    history = history_response.get('history', [])
-
-    # Convert raw output to Pandas Dataframe
-    df = pd.DataFrame(history)
-
-    # Convert Unix timestamp to UTC datetime objects
-    df["time"] = pd.to_datetime(df["t"], unit="s", utc=True)
-
-    # Format time string column
-    df["time_str"] = df["time"].dt.strftime("%Y-%m-%d %H:%M:%S")
-
-    # Convert price to percentage
-    df["price"] = df["p"] * 100
-
-    # st.line_chart(df, x="time_str", y="price")
-
-    # Draw altair interactive chart
-    chart = (
-        alt.Chart(df)
-        .mark_line(point=False)  # point=True gives visible hover targets
-        .encode(
-            x=alt.X("time:T", title="Time"),
-            y=alt.Y("price:Q", title="Price (%)"),
-            tooltip=[
-                alt.Tooltip("time_str:N", title="Exact Time"),
-                alt.Tooltip("price:Q", title="Price (%)", format=".2f"),
-            ],
-        )
-        .interactive()  # Enables zoom & pan
-    )
-    # st.altair_chart(chart, use_container_width=True)
-    st.altair_chart(chart, width='stretch')
-    
-except:
-    st.warning("No price history returned for this timeframe and temperature.")
+for temperature in plotting_temperatures_list:
+    plot_temperature(temperature)
