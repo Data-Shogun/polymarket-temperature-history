@@ -246,9 +246,18 @@ with st.sidebar:
 
     st.write(" ")
 
-    num_temp_plots = st.number_input(
-        'Number of Plots', value=1, min_value=1, max_value=len(temperatures_results.get('temperatares_list'))
+    col1, col2 = st.columns(2)
+
+    with col1:
+        num_temp_plots = st.number_input(
+            'Number of Plots', value=1, min_value=1, max_value=len(temperatures_results.get('temperatares_list'))
     )
+
+    with col2:
+        # The maximum number of plots per row should not exceed the maximum number of plots and the maximum number would be 4
+        max_plots_per_row = min(4, num_temp_plots)
+        num_plots_per_row = st.number_input('Plots per Row', value=1, min_value=1, max_value=max_plots_per_row)
+            
     
     # single_plot = st.checkbox('Single Plot', value=True)
 
@@ -281,5 +290,17 @@ formatted_month_year = selected_date.strftime("%B")  # e.g., 'August'
 formatted_day = str(selected_date.day)  # e.g., '2' or '3'
 formatted_year = selected_date.strftime("%Y")  # e.g., '2026'
 
-for temperature in plotting_temperatures_list:
-    plot_temperature(temperature)
+figures = [
+
+]
+
+for i in range(0, len(plotting_temperatures_list), num_plots_per_row):
+    # Slice the temperatures for the current row
+    row_temps = plotting_temperatures_list[i: i + num_plots_per_row]
+
+    # Create columns
+    cols = st.columns(num_plots_per_row)
+
+    for col, temp in zip(cols, row_temps):
+        with col:
+            plot_temperature(temp)
