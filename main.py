@@ -6,7 +6,9 @@ from datetime import datetime, timedelta, time
 import altair as alt
 
 # CONSTANTS
-fidelity = 5
+FIDELITY = 5
+CHART_TITLE_COLOR = 'navyblue'
+CITIES = ["London", "Paris", "Helsinki"]
 
 st.title('Maximum Temperature History')
 
@@ -104,7 +106,7 @@ def generate_df(temperature):
         history_url = "https://clob.polymarket.com/prices-history"
         params = {
             "market": yes_token_id,
-            "fidelity": fidelity,     # data resolution in minutes
+            "fidelity": FIDELITY,     # data resolution in minutes
             "startTs": int(start_time.timestamp()),
             "endTs": int(end_time.timestamp())
             # "interval": "1d",  # or "1d", "1w", "1m"
@@ -131,16 +133,24 @@ def generate_df(temperature):
         raise Exception('No dataframe return')
 
     
-
-
 def plot_temperature(temperature):
+    # Display Streamlit header above chart
+    # st.subheader(f"Temperature: {temperature}°")
 
     try:
         df = generate_df(temperature)
 
         # Draw altair interactive chart
         chart = (
-            alt.Chart(df)
+            alt.Chart(
+                df,
+                title=alt.TitleParams(
+                    text=f"Temperature: {temperature}°",
+                    fontSize=20,  # Change font size here
+                    color='blue',
+                    anchor="middle",  # Options: 'start', 'middle', 'end'
+                    ),
+            )
             .mark_line(point=False)  # point=True gives visible hover targets
             .encode(
                 x=alt.X("time:T", title="Time"),
@@ -205,7 +215,7 @@ ten_days_ago = now - timedelta(days=10)
 with st.sidebar:
     st.header("Settings")
 
-    city = st.selectbox('City', options=["London", "Paris"]).lower()
+    city = st.selectbox('City', options=CITIES).lower()
 
     # Date Picker (Restricted between 5 days ago and today)
     selected_date = st.date_input(
@@ -285,6 +295,8 @@ start_time, end_time = selected_range
 
 st.write("**Selected Start Time:**", start_time)
 st.write("**Selected End Time:**", end_time)
+
+st.write(" ")
 
 formatted_month_year = selected_date.strftime("%B")  # e.g., 'August'
 formatted_day = str(selected_date.day)  # e.g., '2' or '3'
