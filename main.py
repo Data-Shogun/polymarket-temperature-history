@@ -55,7 +55,8 @@ def extract_temperatures_results(city, date):
             
 
         # Check if that's the correct temperature (verdict)
-        if int(outcomePrices[0]) == 1:
+        # Fix: Convert price to float before checking against 1
+        if float(outcomePrices[0]) >= 0.99:  # Handles both 1 and floating point 0.99+
             verdict_val = temp_val
             verdict_str = temp_str
 
@@ -66,8 +67,6 @@ def extract_temperatures_results(city, date):
         })
 
     temperatures_range = [range(lowest_temp_val, highest_temp_val)]
-    # st.write('verdict:', verdict)
-    # st.write(temperatares_list)
 
     return {
         'verdict_str': verdict_str,
