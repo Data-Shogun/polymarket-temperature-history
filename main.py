@@ -8,7 +8,7 @@ import altair as alt
 # CONSTANTS
 FIDELITY = 5
 CHART_TITLE_COLOR = 'navyblue'
-CITIES = ["London", "Paris", "Helsinki"]
+CITIES = ["London", "Paris", "Helsinki", "Moscow", "Tokyo"]
 
 st.title('Maximum Temperature History')
 
