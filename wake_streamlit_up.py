@@ -9,7 +9,8 @@ from selenium.common.exceptions import TimeoutException
 import time
 import os
 
-STREAMLIT_URL = os.environ.get("STREAMLIT_APP_URL", "https://polymarket-temperature-history.streamlit.app/")
+# STREAMLIT_URL = os.environ.get("STREAMLIT_APP_URL", "https://polymarket-temperature-history.streamlit.app/")
+STREAMLIT_URL_LIST = ["https://polymarket-temperature-history.streamlit.app/", "https://polymarket-temperature.streamlit.app/"]
 
 def main():
     options = Options()
@@ -23,43 +24,44 @@ def main():
 
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
 
-    try:
-        driver.get(STREAMLIT_URL)
-        print(f"Opened {STREAMLIT_URL}")
-
-        wait = WebDriverWait(driver, 20)
-        
-        # Matches button content across child tags
-        wake_button_xpath = "//button[contains(., 'Yes, get this app back up')]"
-        
+    for STREAMLIT_URL in STREAMLIT_URL_LIST:
         try:
-            button = wait.until(EC.element_to_be_clickable((By.XPATH, wake_button_xpath)))
-            print("Wake-up button found. Clicking...")
-            button.click()
+            driver.get(STREAMLIT_URL)
+            print(f"Opened {STREAMLIT_URL}")
 
-            wait.until(EC.invisibility_of_element_located((By.XPATH, wake_button_xpath)))
-            print("Button clicked. Keeping browser open for container boot...")
+            wait = WebDriverWait(driver, 20)
             
-            # Pause to keep session alive while Streamlit initializes
-            time.sleep(15)
-            print("Wake-up request sent successfully! ✅")
-
-        except TimeoutException:
-            print("Wake-up button not found. Checking if app main UI is present...")
-            # Verify actual Streamlit app container before declaring success
+            # Matches button content across child tags
+            wake_button_xpath = "//button[contains(., 'Yes, get this app back up')]"
+            
             try:
-                wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "[data-testid='stAppViewContainer'], .stApp")))
-                print("App is already awake and running ✅")
-            except TimeoutException:
-                print("App failed to load or wake up ❌")
-                exit(1)
+                button = wait.until(EC.element_to_be_clickable((By.XPATH, wake_button_xpath)))
+                print("Wake-up button found. Clicking...")
+                button.click()
 
-    except Exception as e:
-        print(f"Unexpected error: {e}")
-        exit(1)
-    finally:
-        driver.quit()
-        print("Script finished.")
+                wait.until(EC.invisibility_of_element_located((By.XPATH, wake_button_xpath)))
+                print("Button clicked. Keeping browser open for container boot...")
+                
+                # Pause to keep session alive while Streamlit initializes
+                time.sleep(15)
+                print("Wake-up request sent successfully! ✅")
+
+            except TimeoutException:
+                print("Wake-up button not found. Checking if app main UI is present...")
+                # Verify actual Streamlit app container before declaring success
+                try:
+                    wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "[data-testid='stAppViewContainer'], .stApp")))
+                    print("App is already awake and running ✅")
+                except TimeoutException:
+                    print("App failed to load or wake up ❌")
+                    exit(1)
+
+        except Exception as e:
+            print(f"Unexpected error: {e}")
+            exit(1)
+        finally:
+            driver.quit()
+            print("Script finished.")
 
 if __name__ == "__main__":
     main()
