@@ -54,7 +54,8 @@ def main():
                     print("App is already awake and running ✅")
                 except TimeoutException:
                     print("App failed to load or wake up ❌")
-                    exit(1)
+                    # exit(1)
+                    continue
 
         except Exception as e:
             print(f"Unexpected error: {e}")
