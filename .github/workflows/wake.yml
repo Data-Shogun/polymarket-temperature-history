@@ -23,4 +23,4 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run Selenium script
-        run: python weke_streamlit_up.py
+        run: python wake_streamlit_up.py
