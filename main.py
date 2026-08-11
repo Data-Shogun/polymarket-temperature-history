@@ -287,7 +287,8 @@ with st.sidebar:
         plotting_temperatures_list.append(input_temperature)
 
 
-st.info(f'Verdict: {verdict_str}')
+st.markdown(f"## :rainbow[{city.title()}] :thermometer:")
+st.success(f'Verdict: {verdict_str}')
 
 # Extract min and max from output tuple
 start_time, end_time = selected_range
