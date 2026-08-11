@@ -10,6 +10,9 @@ FIDELITY = 5
 CHART_TITLE_COLOR = 'navyblue'
 CITIES = ["London", "Paris", "Helsinki", "Moscow", "Tokyo"]
 
+# Page Config
+st.set_page_config(page_title="Temperature History", page_icon="🌡️")
+
 st.title('Maximum Temperature History')
 
 # Date format converter (compantible with event urls)
