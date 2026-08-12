@@ -9,6 +9,8 @@ import altair as alt
 FIDELITY = 5
 CHART_TITLE_COLOR = 'navyblue'
 CITIES = ["London", "Paris", "Helsinki", "Moscow", "Tokyo"]
+PRICE_LOWER_LIMIT = 0
+PRICE_UPPER_LIMIT = 100
 
 # Page Config
 st.set_page_config(page_title="Temperature History", page_icon="🌡️")
@@ -25,14 +27,22 @@ def excract_number_from_temp_str(temp_str):
 
 # Helper function to excract temperature ranges of a particular date and city
 def extract_temperatures_results(city, date):
-    # event_url_sample = f'https://gamma-api.polymarket.com/events/slug/highest-temperature-in-london-on-august-2-2026'
     formatted_date = format_date_string(str(date))
-    event_url = f'https://gamma-api.polymarket.com/events/slug/highest-temperature-in-{city}-on-{formatted_date}'
+    event_url = (
+        'https://gamma-api.polymarket.com/events/slug/'
+        f'highest-temperature-in-{city}-'
+        f'on-{formatted_date}'
+    )
     response = requests.get(event_url).json()
     markets = response["markets"]
 
-    lowest_temp_item = [item for item in markets if 'below' in item.get('groupItemTitle').lower()][0]
-    highest_temp_item = [item for item in markets if 'higher' in item.get('groupItemTitle').lower()][0]
+    lowest_temp_item = [
+        item for item in markets if 'below' in item.get('groupItemTitle').lower()
+    ][0]
+
+    highest_temp_item = [
+        item for item in markets if 'higher' in item.get('groupItemTitle').lower()
+    ][0]
 
     lowest_temp_str = lowest_temp_item.get('groupItemTitle')
     highest_temp_str = highest_temp_item.get('groupItemTitle')
@@ -51,12 +61,9 @@ def extract_temperatures_results(city, date):
         if 'below' in temp_str:
             lowest_temp_str = temp_str
             lowest_temp_val = temp_val
-            
         elif 'higher' in temp_str:
             highest_temp_str = temp_str
             highest_temp_val = temp_val
-            
-
         # Check if that's the correct temperature (verdict)
         # Fix: Convert price to float before checking against 1
         if float(outcomePrices[0]) >= 0.99:  # Handles both 1 and floating point 0.99+
@@ -85,24 +92,22 @@ def extract_temperatures_results(city, date):
 
 
 def generate_df(temperature):
-     MARKET_SLUG = [
-          temp_item.get('temp_slug') for temp_item in temperatures_results.get('temperatares_list') if temp_item.get('temp_val') == temperature
-          ][0]
+    MARKET_SLUG = [
+        temp_item.get('temp_slug')
+        for temp_item in temperatures_results.get('temperatares_list')
+        if temp_item.get('temp_val') == temperature
+    ][0]
 
-     market_url = f"https://gamma-api.polymarket.com/markets/slug/{MARKET_SLUG}"
+    market_url = f"https://gamma-api.polymarket.com/markets/slug/{MARKET_SLUG}"
 
-     # st.markdown(f":small[**API URL: {market_url}**]")
-     
-     response = requests.get(market_url).json()
- 
-     try:
+    response = requests.get(market_url).json()
+
+    try:
         # Parse the token IDs (clobTokenIds comes back as a JSON-encoded string)
         clob_token_ids = json.loads(response["clobTokenIds"])
+
         # Typically, index 0 = YES, index 1 = NO
         yes_token_id = clob_token_ids[0]
-        no_token_id = clob_token_ids[1]
-
-        # print(f"YES Token ID: {yes_token_id}")
 
         # 2. Query price history for the YES token
         history_url = "https://clob.polymarket.com/prices-history"
@@ -131,40 +136,93 @@ def generate_df(temperature):
 
         return df
 
-     except Exception as e:
+    except Exception as e:
         raise Exception('No dataframe return')
 
-    
-def plot_temperature(temperature):
+
+def draw_chart(
+        df,
+        single_chart=True,
+        scale_plots=False,
+        single_temperature=None,
+        temperatures_list=None
+    ):
+    # Chart title
+    if single_temperature:
+        chart_title = f"Temperature: {single_temperature}°"
+    else:
+        chart_title = f"Temperatures: {', '.join([
+            str(temp) + '°' for temp in sorted(set(temperatures_list))
+        ])}"
+    # Chart encode values
+    x_encode = alt.X("time:T", title="Time")
+
+    y_encode = (
+        alt.Y("price:Q", title="Price (%)")
+        if scale_plots
+        else alt.Y(
+            "price:Q",
+            title="Price (%)",
+            scale=alt.Scale(domain=[PRICE_LOWER_LIMIT, PRICE_UPPER_LIMIT]))
+    )
+
+    color_encode = (
+        alt.Color("temperature:N", title="Temperature")
+        if single_chart
+        else
+            alt.Undefined
+    )
+
+    tooltip_encode = (
+        [
+            alt.Tooltip("time_str:N", title="Exact Time"),
+            alt.Tooltip("temperature:N", title="Temperature"),
+            alt.Tooltip("price:Q", title="Price (%)", format=".2f"),
+        ]
+        if single_chart
+        else
+            [
+                alt.Tooltip("time_str:N", title="Exact Time"),
+                alt.Tooltip("price:Q", title="Price (%)", format=".2f"),
+            ]
+    )
+
+    # Draw altair interactive chart
+    chart = (
+        alt.Chart(
+            df,
+            title=alt.TitleParams(
+                # text=f"Temperature: {temperature}°",
+                text=chart_title,
+            fontSize=20,  # Change font size here
+            color='blue',
+            anchor="middle",  # Options: 'start', 'middle', 'end'
+            ),
+    )
+    .mark_line(point=False)  # point=True gives visible hover targets
+    .encode(
+        x=x_encode,
+        y=y_encode,
+        color=color_encode,
+        tooltip=tooltip_encode,
+    )
+    .interactive()  # Enables zoom & pan
+    )
+    # st.altair_chart(chart, use_container_width=True)
+    st.altair_chart(chart, width='stretch')
+
+
+def plot_individual_temperature_chart(temperature):
     try:
         df = generate_df(temperature)
-
-        # Draw altair interactive chart
-        chart = (
-            alt.Chart(
-                df,
-                title=alt.TitleParams(
-                    text=f"Temperature: {temperature}°",
-                    fontSize=20,  # Change font size here
-                    color='blue',
-                    anchor="middle",  # Options: 'start', 'middle', 'end'
-                    ),
-            )
-            .mark_line(point=False)  # point=True gives visible hover targets
-            .encode(
-                x=alt.X("time:T", title="Time"),
-                y=alt.Y("price:Q", title="Price (%)"),
-                tooltip=[
-                    alt.Tooltip("time_str:N", title="Exact Time"),
-                    alt.Tooltip("price:Q", title="Price (%)", format=".2f"),
-                ],
-            )
-            .interactive()  # Enables zoom & pan
+        draw_chart(
+            df,
+            single_chart=single_chart,
+            scale_plots=scale_plots,
+            single_temperature=temperature
         )
-        # st.altair_chart(chart, use_container_width=True)
-        st.altair_chart(chart, width='stretch')
-        
-    except:
+    except Exception as e:
+        st.error(e)
         st.warning("No price history returned for this timeframe and temperature.")
 
 
@@ -177,7 +235,6 @@ def plot_temperatures_in_single_chart(temperatures_list):
                 # Add a column so Altair knows which line this data belongs to
                 df['temperature'] = f"{temp}°C"
                 df_list.append(df)
-        
         if not df_list:
             st.warning("No price history returned for these temperatures.")
             return
@@ -185,33 +242,15 @@ def plot_temperatures_in_single_chart(temperatures_list):
         # Combine all individual dataframes into a single dataframe
         combined_df = pd.concat(df_list, ignore_index=True)
 
-        chart = (
-            alt.Chart(
-                combined_df,
-                title=alt.TitleParams(
-                    text="Temperature Comparisons",
-                    fontSize=20, 
-                    color='blue',
-                    anchor="middle",  
-                ),
-            )
-            .mark_line(point=False)
-            .encode(
-                x=alt.X("time:T", title="Time"),
-                y=alt.Y("price:Q", title="Price (%)"),
-                # Add color encoding to separate the lines and create a legend
-                color=alt.Color("temperature:N", title="Temperature"),
-                tooltip=[
-                    alt.Tooltip("time_str:N", title="Exact Time"),
-                    alt.Tooltip("temperature:N", title="Temperature"),
-                    alt.Tooltip("price:Q", title="Price (%)", format=".2f"),
-                ],
-            )
-            .interactive() 
+        draw_chart(
+            combined_df,
+            single_chart=single_chart,
+            scale_plots=scale_plots,
+            temperatures_list=temperatures_list
         )
-        st.altair_chart(chart, use_container_width=True)
 
     except Exception as e:
+        st.error(e)
         st.warning(f"Error plotting data: {e}")
 
 
@@ -262,7 +301,10 @@ with st.sidebar:
         st.session_state.ref_now = datetime.now()
         st.rerun()
 
-    temperatures_results = extract_temperatures_results(city=city, date=selected_date)
+    temperatures_results = extract_temperatures_results(
+        city=city,
+        date=selected_date
+    )
 
     verdict_str = temperatures_results.get('verdict_str')
     verdict_val = temperatures_results.get('verdict_val')
@@ -271,29 +313,34 @@ with st.sidebar:
 
     st.write(" ")
 
+    scale_plots = st.checkbox('Scale plots (y-axis)', value=False)
     single_chart = st.checkbox('Single Chart', value=True)
 
     col1, col2 = st.columns(2)
 
     with col1:
         num_temp_plots = st.number_input(
-            'Number of Plots', value=1, min_value=1, max_value=len(temperatures_results.get('temperatares_list'))
-    )
+            'Number of Plots',
+            value=1,
+            min_value=1,
+            max_value=len(temperatures_results.get('temperatares_list'))
+        )
 
     if not single_chart:
         with col2:
-            # The maximum number of plots per row should not exceed the maximum number of plots and the maximum number would be 4
+            # The maximum number of plots per row should not exceed
+            # the maximum number of plots and the maximum number would be 4
             max_plots_per_row = min(4, num_temp_plots)
-            num_plots_per_row = st.number_input('Plots per Row', value=1, min_value=1, max_value=max_plots_per_row)
-            
-    
-
+            num_plots_per_row = st.number_input(
+                'Plots per Row',
+                value=1,
+                min_value=1,
+                max_value=max_plots_per_row
+            )
     st.write(" ")
-
     plotting_temperatures_list = []
 
     for i in range(num_temp_plots):
-        
         input_temperature = st.slider(
             label=f"Select temperature {i + 1}",
             value=verdict_val,
@@ -333,4 +380,4 @@ else:
 
         for col, temp in zip(cols, row_temps):
             with col:
-                plot_temperature(temp)
+                plot_individual_temperature_chart(temp)
