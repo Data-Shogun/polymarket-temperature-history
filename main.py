@@ -136,9 +136,6 @@ def generate_df(temperature):
 
     
 def plot_temperature(temperature):
-    # Display Streamlit header above chart
-    # st.subheader(f"Temperature: {temperature}°")
-
     try:
         df = generate_df(temperature)
 
@@ -171,35 +168,51 @@ def plot_temperature(temperature):
         st.warning("No price history returned for this timeframe and temperature.")
 
 
-def multi_plot_temperatures(temperatures_list):
-    df_list = [generate_df(temperature) for temperature in temperatures_list]
+def plot_temperatures_in_single_chart(temperatures_list):
+    try:
+        df_list = []
+        for temp in temperatures_list:
+            df = generate_df(temp)
+            if df is not None and not df.empty:
+                # Add a column so Altair knows which line this data belongs to
+                df['temperature'] = f"{temp}°C"
+                df_list.append(df)
+        
+        if not df_list:
+            st.warning("No price history returned for these temperatures.")
+            return
 
-    df_melted = df_list.melt(
-        id_vars=["time", "time_str"],
-        value_vars=temperatures_list,
-        var_name="Series",
-        value_name="temperature",
-    )
+        # Combine all individual dataframes into a single dataframe
+        combined_df = pd.concat(df_list, ignore_index=True)
 
-    chart = (
-        alt.Chart(df_melted)
-        .mark_line(point=False)
-        .encode(
-            x=alt.X("time:T", title="Time"),
-            y=alt.Y("temperature:Q", title="Temperature (°C)"),
-            color=alt.Color("Series:N", title="Metric"),  # Automatically adds a legend
-            tooltip=[
-                alt.Tooltip("time_str:N", title="Exact Time"),
-                alt.Tooltip("Series:N", title="Series"),
-                alt.Tooltip("temperature:Q", title="Temp (°C)", format=".2f"),
-            ],
+        chart = (
+            alt.Chart(
+                combined_df,
+                title=alt.TitleParams(
+                    text="Temperature Comparisons",
+                    fontSize=20, 
+                    color='blue',
+                    anchor="middle",  
+                ),
+            )
+            .mark_line(point=False)
+            .encode(
+                x=alt.X("time:T", title="Time"),
+                y=alt.Y("price:Q", title="Price (%)"),
+                # Add color encoding to separate the lines and create a legend
+                color=alt.Color("temperature:N", title="Temperature"),
+                tooltip=[
+                    alt.Tooltip("time_str:N", title="Exact Time"),
+                    alt.Tooltip("temperature:N", title="Temperature"),
+                    alt.Tooltip("price:Q", title="Price (%)", format=".2f"),
+                ],
+            )
+            .interactive() 
         )
-        .interactive()
-    )
+        st.altair_chart(chart, use_container_width=True)
 
-    st.altair_chart(chart, use_container_width=True)
-
-
+    except Exception as e:
+        st.warning(f"Error plotting data: {e}")
 
 
 # 1. Define date bounds
@@ -258,6 +271,8 @@ with st.sidebar:
 
     st.write(" ")
 
+    single_plot = st.checkbox('Single Plot', value=True)
+
     col1, col2 = st.columns(2)
 
     with col1:
@@ -265,13 +280,13 @@ with st.sidebar:
             'Number of Plots', value=1, min_value=1, max_value=len(temperatures_results.get('temperatares_list'))
     )
 
-    with col2:
-        # The maximum number of plots per row should not exceed the maximum number of plots and the maximum number would be 4
-        max_plots_per_row = min(4, num_temp_plots)
-        num_plots_per_row = st.number_input('Plots per Row', value=1, min_value=1, max_value=max_plots_per_row)
+    if not single_plot:
+        with col2:
+            # The maximum number of plots per row should not exceed the maximum number of plots and the maximum number would be 4
+            max_plots_per_row = min(4, num_temp_plots)
+            num_plots_per_row = st.number_input('Plots per Row', value=1, min_value=1, max_value=max_plots_per_row)
             
     
-    # single_plot = st.checkbox('Single Plot', value=True)
 
     st.write(" ")
 
@@ -305,17 +320,17 @@ formatted_month_year = selected_date.strftime("%B")  # e.g., 'August'
 formatted_day = str(selected_date.day)  # e.g., '2' or '3'
 formatted_year = selected_date.strftime("%Y")  # e.g., '2026'
 
-figures = [
 
-]
+if single_plot:
+    plot_temperatures_in_single_chart(plotting_temperatures_list)
+else:
+    for i in range(0, len(plotting_temperatures_list), num_plots_per_row):
+        # Slice the temperatures for the current row
+        row_temps = plotting_temperatures_list[i: i + num_plots_per_row]
 
-for i in range(0, len(plotting_temperatures_list), num_plots_per_row):
-    # Slice the temperatures for the current row
-    row_temps = plotting_temperatures_list[i: i + num_plots_per_row]
+        # Create columns
+        cols = st.columns(num_plots_per_row)
 
-    # Create columns
-    cols = st.columns(num_plots_per_row)
-
-    for col, temp in zip(cols, row_temps):
-        with col:
-            plot_temperature(temp)
+        for col, temp in zip(cols, row_temps):
+            with col:
+                plot_temperature(temp)
