@@ -10,7 +10,7 @@ Live Demo: [polymarket-temperature-history.streamlit.app](https://polymarket-tem
 
 | Dashboard Overview | Multi-Temperature Comparison Chart |
 |---|---|
-| ![Dashboard Overview](image_05f8ba.png) | ![Chart View](2026-08-12T17-26_chart.png) |
+| ![Dashboard Overview](./snapshots/image_05f8ba.png) | ![Chart View](./snapshots/2026-08-12T17-26_chart.png) |
 
 ---
 
@@ -58,7 +58,7 @@ source venv/bin/activate  # On Windows use: venv\Scripts\activate
 ### 3. Install Dependencies
 
 ```bash
-pip install streamlit pandas requests altair
+pip install streamlit -r requirements.txt
 ```
 
 ### 4. Run the Streamlit App
