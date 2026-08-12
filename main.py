@@ -271,7 +271,7 @@ with st.sidebar:
 
     st.write(" ")
 
-    single_plot = st.checkbox('Single Plot', value=True)
+    single_chart = st.checkbox('Single Chart', value=True)
 
     col1, col2 = st.columns(2)
 
@@ -280,7 +280,7 @@ with st.sidebar:
             'Number of Plots', value=1, min_value=1, max_value=len(temperatures_results.get('temperatares_list'))
     )
 
-    if not single_plot:
+    if not single_chart:
         with col2:
             # The maximum number of plots per row should not exceed the maximum number of plots and the maximum number would be 4
             max_plots_per_row = min(4, num_temp_plots)
@@ -321,7 +321,7 @@ formatted_day = str(selected_date.day)  # e.g., '2' or '3'
 formatted_year = selected_date.strftime("%Y")  # e.g., '2026'
 
 
-if single_plot:
+if single_chart:
     plot_temperatures_in_single_chart(plotting_temperatures_list)
 else:
     for i in range(0, len(plotting_temperatures_list), num_plots_per_row):
